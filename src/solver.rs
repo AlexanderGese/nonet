@@ -68,6 +68,33 @@ pub fn solve_random(b: &mut Board, rng: &mut Rng) -> bool {
     }
 }
 
+// one move the solver made - the tui replays these to animate the search
+pub enum Step {
+    Place(usize, u8),
+    Erase(usize), // backtrack
+}
+
+pub fn solve_trace(b: &mut Board, steps: &mut Vec<Step>) -> bool {
+    match next_cell(b) {
+        None => true,
+        Some((_, 0)) => false,
+        Some((idx, mask)) => {
+            for v in 1..=9u8 {
+                if mask & (1 << v) != 0 {
+                    b.cells[idx] = v;
+                    steps.push(Step::Place(idx, v));
+                    if solve_trace(b, steps) {
+                        return true;
+                    }
+                    b.cells[idx] = 0;
+                    steps.push(Step::Erase(idx));
+                }
+            }
+            false
+        }
+    }
+}
+
 // count up to `limit` solutions - pass 2 when all we care about is "is it unique"
 pub fn count_solutions(b: &mut Board, limit: usize) -> usize {
     match next_cell(b) {
