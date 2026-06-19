@@ -1,24 +1,20 @@
 mod board;
+mod generator;
 mod render;
 mod rng;
 mod solver;
-use board::Board;
 
 fn main() {
-    let arg = std::env::args().nth(1).unwrap_or_else(|| ".".repeat(81));
-    let Some(mut b) = Board::parse(&arg) else {
-        eprintln!("need 81 cells");
-        return;
-    };
-    for l in render::grid_lines(&b) {
+    // generate one and solve it
+    let mut r = rng::Rng::new(12345);
+    let p = generator::generate(&mut r, 32);
+    for l in render::grid_lines(&p.board) {
         println!("{l}");
     }
-    if solver::solve(&mut b) {
-        println!();
-        for l in render::grid_lines(&b) {
-            println!("{l}");
-        }
-    } else {
-        eprintln!("no solution");
+    let mut s = p.board;
+    solver::solve(&mut s);
+    println!();
+    for l in render::grid_lines(&s) {
+        println!("{l}");
     }
 }
