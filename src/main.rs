@@ -3,6 +3,7 @@ mod generator;
 mod render;
 mod rng;
 mod solver;
+mod tui;
 
 use board::Board;
 use clap::{Parser, Subcommand};
@@ -12,11 +13,18 @@ use std::process::ExitCode;
 #[command(name = "nonet", version, about = "A Sudoku solver + generator with a visual CLI")]
 struct Cli {
     #[command(subcommand)]
-    cmd: Cmd,
+    cmd: Option<Cmd>,
 }
 
 #[derive(Subcommand)]
 enum Cmd {
+    /// Watch the solver crack a fresh puzzle (interactive). This is the default.
+    Tui {
+        #[arg(short, long, default_value = "hard")]
+        difficulty: String,
+        #[arg(long)]
+        seed: Option<u64>,
+    },
     /// Solve an 81-char puzzle ('.' or 0 = empty)
     Solve { puzzle: String },
     /// Generate a fresh puzzle (easy | medium | hard | expert)
@@ -46,7 +54,18 @@ fn show(title: &str, b: &Board) {
 }
 
 fn main() -> ExitCode {
-    match Cli::parse().cmd {
+    let cmd = Cli::parse().cmd.unwrap_or(Cmd::Tui {
+        difficulty: "hard".into(),
+        seed: None,
+    });
+    match cmd {
+        Cmd::Tui { difficulty, seed } => {
+            let seed = seed.unwrap_or_else(seed_now);
+            if let Err(e) = tui::run(seed, &difficulty) {
+                eprintln!("\x1b[31mtui error:\x1b[0m {e}");
+                return ExitCode::FAILURE;
+            }
+        }
         Cmd::Solve { puzzle } => {
             let Some(mut b) = Board::parse(&puzzle) else {
                 eprintln!("\x1b[31merror:\x1b[0m need 81 cells (digits, '.' or '0')");
