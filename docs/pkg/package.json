@@ -1,0 +1,15 @@
+{
+  "name": "nonet_web",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "nonet_web_bg.wasm",
+    "nonet_web.js",
+    "nonet_web.d.ts"
+  ],
+  "main": "nonet_web.js",
+  "types": "nonet_web.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

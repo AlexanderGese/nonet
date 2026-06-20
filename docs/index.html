@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>nonet — sudoku in your browser</title>
+<style>
+  :root {
+    --bg: #0b0e14; --panel: #11151f; --line: #1f2733;
+    --dim: #5b6878; --txt: #c8d3e0; --given: #e6edf3; --solved: #6ee787;
+    --accent: #58a6ff; --hot: #f0c674; --bad: #f85149;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--txt);
+    font: 15px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    display: flex; flex-direction: column; align-items: center;
+    min-height: 100vh; padding: 28px 16px;
+  }
+  h1 { margin: 0; font-size: 22px; color: var(--given); letter-spacing: .5px; }
+  h1 .x { color: var(--accent); }
+  .sub { color: var(--dim); margin: 4px 0 22px; font-size: 13px; }
+  .wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+          padding: 22px; box-shadow: 0 8px 40px #0006; }
+  .grid {
+    display: grid; grid-template-columns: repeat(9, 40px);
+    grid-template-rows: repeat(9, 40px);
+    border: 2px solid #2b3543; background: #2b3543; gap: 1px;
+  }
+  .cell {
+    display: flex; align-items: center; justify-content: center;
+    background: #0d111a; font-size: 19px; color: var(--solved);
+    user-select: none; transition: background .08s, color .08s;
+  }
+  .cell.given { color: var(--given); font-weight: 700; }
+  .cell.empty { color: #243; }
+  .cell.cur  { background: var(--hot); color: #111; }
+  .cell.bad  { background: var(--bad); color: #111; }
+  .cell.br { border-right: 2px solid #2b3543; }
+  .cell.bb { border-bottom: 2px solid #2b3543; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+         margin-top: 18px; max-width: 380px; }
+  button, select {
+    background: #182030; color: var(--txt); border: 1px solid var(--line);
+    border-radius: 6px; padding: 7px 12px; font: inherit; cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); color: var(--given); }
+  button.go { background: #14532d33; border-color: #2ea04366; color: var(--solved); }
+  .stats { margin-top: 14px; color: var(--dim); font-size: 13px; min-height: 20px; }
+  .stats b { color: var(--txt); font-weight: 600; }
+  .stats .ok { color: var(--solved); }
+  input[type=range] { accent-color: var(--accent); }
+  a { color: var(--accent); }
+  footer { margin-top: 26px; color: var(--dim); font-size: 12px; }
+</style>
+</head>
+<body>
+  <h1>nonet<span class="x">·</span>sudoku</h1>
+  <div class="sub">backtracking solver + unique-puzzle generator, compiled to WebAssembly</div>
+
+  <div class="wrap">
+    <div class="grid" id="grid"></div>
+    <div class="bar">
+      <select id="diff" title="difficulty">
+        <option value="easy">easy</option>
+        <option value="medium">medium</option>
+        <option value="hard" selected>hard</option>
+        <option value="expert">expert</option>
+      </select>
+      <button id="new">new puzzle</button>
+      <button id="solve" class="go">▶ solve</button>
+      <label style="color:var(--dim)">speed
+        <input type="range" id="speed" min="0" max="60" value="42" />
+      </label>
+    </div>
+    <div class="stats" id="stats">loading wasm…</div>
+  </div>
+
+  <footer>open source · <a href="https://github.com/AlexanderGese/nonet">github.com/AlexanderGese/nonet</a></footer>
+
+<script type="module">
+import init, { gen, trace } from './pkg/nonet_web.js';
+
+const gridEl = document.getElementById('grid');
+const statsEl = document.getElementById('stats');
+const diffEl = document.getElementById('diff');
+const speedEl = document.getElementById('speed');
+
+const cells = [];
+for (let i = 0; i < 81; i++) {
+  const d = document.createElement('div');
+  d.className = 'cell';
+  const r = (i / 9) | 0, c = i % 9;
+  if (c % 3 === 2 && c !== 8) d.classList.add('br');
+  if (r % 3 === 2 && r !== 8) d.classList.add('bb');
+  gridEl.appendChild(d);
+  cells.push(d);
+}
+
+let puzzle = '', given = [], timer = null;
+
+function paint(line, last = -1, bad = false) {
+  for (let i = 0; i < 81; i++) {
+    const ch = line[i];
+    const cell = cells[i];
+    cell.textContent = ch === '.' ? '' : ch;
+    cell.className = 'cell'
+      + ((i % 9) % 3 === 2 && i % 9 !== 8 ? ' br' : '')
+      + (((i / 9) | 0) % 3 === 2 && i < 72 ? ' bb' : '');
+    if (ch === '.') cell.classList.add('empty');
+    else if (given[i]) cell.classList.add('given');
+    if (i === last) cell.classList.add(bad ? 'bad' : 'cur');
+  }
+}
+
+function stop() { if (timer) { clearInterval(timer); timer = null; } }
+
+function newPuzzle() {
+  stop();
+  const seed = BigInt(Math.floor(Math.random() * 2 ** 52));
+  puzzle = gen(diffEl.value, seed);
+  given = [...puzzle].map(c => c !== '.');
+  paint(puzzle);
+  const clues = given.filter(Boolean).length;
+  statsEl.innerHTML = `<b>${diffEl.value}</b> · ${clues} clues · ready`;
+}
+
+function runSolve() {
+  stop();
+  const steps = JSON.parse(trace(puzzle));
+  const work = [...puzzle];
+  let pos = 0, placed = 0, backs = 0;
+  const delay = Math.max(2, 62 - Number(speedEl.value));
+
+  timer = setInterval(() => {
+    // a few steps per frame at high speed so big searches don't drag
+    const batch = Number(speedEl.value) > 45 ? 4 : 1;
+    let last = -1, bad = false;
+    for (let n = 0; n < batch && pos < steps.length; n++) {
+      const [i, v] = steps[pos++];
+      if (v === 0) { work[i] = '.'; backs++; bad = true; }
+      else { work[i] = String(v); placed++; bad = false; }
+      last = i;
+    }
+    paint(work.join(''), last, bad);
+    statsEl.innerHTML = `<b>${diffEl.value}</b> · placed ${placed} · backtracks ${backs}`;
+    if (pos >= steps.length) {
+      stop();
+      paint(work.join(''));
+      statsEl.innerHTML = `<span class="ok">solved ✓</span> · ${placed} placements · ${backs} backtracks`;
+    }
+  }, delay);
+}
+
+document.getElementById('new').onclick = newPuzzle;
+document.getElementById('solve').onclick = runSolve;
+
+init().then(() => newPuzzle());
+</script>
+</body>
+</html>
