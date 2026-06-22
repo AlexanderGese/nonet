@@ -2,7 +2,13 @@
 name = "nonet"
 version = "0.1.0"
 edition = "2021"
-description = "A Sudoku solver + generator with a visual TUI"
+description = "A Sudoku solver + generator with a visual terminal UI that animates the backtracking search"
+license = "MIT"
+repository = "https://github.com/AlexanderGese/nonet"
+readme = "README.md"
+keywords = ["sudoku", "solver", "tui", "cli", "ratatui"]
+categories = ["command-line-utilities", "games"]
+authors = ["Alexander Gese <alexander.gese07@gmail.com>"]
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
